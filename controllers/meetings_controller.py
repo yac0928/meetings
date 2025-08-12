@@ -10,6 +10,7 @@ def add_meeting(db):
     meeting_data = {
         'title': data['title'],
         'transcript': data.get('transcript', ''),
+        'improvedTranscript': data.get('improvedTranscript', ''),
         'meetingNote': data.get('meetingNote', ''),
         'summary': data.get('summary', ''),
         'keywords': data.get('keywords', []),

@@ -1,6 +1,9 @@
 from flask import request
 from helpers.whisperx_helper import transcribe_mp3_to_text
+from controllers.meetings_controller import get_meeting
+from helpers.gemini import gemini_api_call
 from datetime import datetime, timezone
+
 import os
 
 def upload_and_transcribe(db, meeting_id):
@@ -42,3 +45,28 @@ def add_transcript(db, meeting_id):
     data['meeting_id'] = meeting_id
     doc_ref = db.collection('meeting_transcripts').add(data)
     return {'id': doc_ref[1].id, 'msg': 'created'}, 201
+
+def get_transcript(db, meeting_id):
+    meeting = get_meeting(db, meeting_id)
+    transcripts = meeting[0]['transcript']
+    return transcripts, 200
+
+def improve_transcript(db, meeting_id):
+    meeting_doc_ref = db.collection('meetings').document(meeting_id)
+    meeting_doc = meeting_doc_ref.get()
+    if not meeting_doc.exists:
+        return {'msg': 'Meeting not found'}, 404
+    
+    transcript, status = get_transcript(db, meeting_id)
+    if status != 200:
+        return {"error": "無法取得逐字稿"}, status
+    combined_transcript = "\n".join([segment['text'] for segment in transcript])
+    prompt = "transcripts是老師與學生的會議，語音轉文字的逐字稿，請幫我改善轉換不順的逐字稿，讓它更通順易懂，並且保留原意。回傳格式僅僅為改善後的逐字稿，不要回答其他任何內容。"
+    all_prompt = f"transcript: {combined_transcript}\n{prompt}"
+    improved_transcript = gemini_api_call(all_prompt)
+    meeting_doc_ref.update({
+        'improvedTranscript': improved_transcript,
+        'lastUpdated': datetime.now(timezone.utc)
+    })
+    return improved_transcript, 200
+
